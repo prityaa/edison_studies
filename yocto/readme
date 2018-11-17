@@ -1,0 +1,9 @@
+source the enc file, will give us bitbake support.
+	source  out/linux64/poky/oe-init-build-env
+
+building the project (take around 4hrs)
+	bitbake core-image-minimal
+
+images will be installed in
+	build/tmp/deploy/images/qemux86/ -ahl
+
