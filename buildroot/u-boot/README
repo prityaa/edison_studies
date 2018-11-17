@@ -1,0 +1,1 @@
+mkimage -T script -C none -n 'env var set for manual kernel' -d env_script env_script.img

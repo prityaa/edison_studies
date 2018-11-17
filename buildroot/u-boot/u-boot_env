@@ -1,0 +1,30 @@
+
+bootargs for ext4
+=================
+# 2 partitions are made
+#	1 . boot - bzImage
+#	2 . ext4 - filesys
+
+setenv bootargs_edsboot 'tty1 console=ttyS2,115200n8 root=/dev/mmcblk1p2 rootfstype=ext4 systemd.unit=multi-user.target hardware_id=00' && setenv bootargs ${bootargs_edsboot} && fatload mmc 1 0x100000 bzImage && zboot 0x100000
+
+=> bzImage and rootfs are compiled with buildroot and sinmlink of 'init' is created in /
+	ln -s /sbin/init /
+
+bootargs for ramfs
+==================
+setenv bootargs_edsboot 'console=tty1 console=ttyS2,115200n8 rootfstype=ramfs rw' && setenv bootargs ${bootargs_edsboot} && fatload mmc 1 0x100000 bzImage && zboot 0x100000
+
+	here cpio is attached as initramfs in kernel path
+
+				OR
+
+	setenv boot_edsboot 'zboot 0x100000 0 0x3000000 0x1000000'
+	setenv bootargs_edsboot 'root=/dev/mmcblk0p8 rootfstype=ext4 console=ttyS2 earlyprintk=ttyS2,keep loglevel=4 g_multi.ethernet_config=cdc systemd.unit=mu'
+	setenv bootargs_edsboot 'tty1 console=ttyS2,115200n8 root=/dev/mmcblk1p1 rootfstype=ext4 systemd.unit=multi-user.target hardware_id=00'
+	setenv bootargs_edsboot 'console=tty1 console=ttyS2,115200n8 rootfstype=ramfs rw'
+	setenv load_edsboot 'fatload mmc 1 0x100000 bzImage && fatload mmc 1 0x3000000 rootfs.cpio'
+	setenv bootcmd_edsboot 'setenv bootargs ${bootargs_edsboot}; run load_edsboot; run boot_edsboot'
+	echo -- set is done --
+	run bootcmd_edsboot
+
+

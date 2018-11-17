@@ -1,0 +1,1 @@
+setenv bootargs_edsboot 'tty1 console=ttyS2,115200n8 root=/dev/mmcblk1p2 rootfstype=ext4 systemd.unit=multi-user.target hardware_id=00' && setenv bootargs ${bootargs_edsboot} && fatload mmc 1 0x100000 bzImage && zboot 0x100000
