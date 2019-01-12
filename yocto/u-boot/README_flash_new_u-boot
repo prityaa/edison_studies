@@ -1,0 +1,31 @@
+
+# HOST Side
+============
+	1 . compile u-boot code
+	make edison_defconfig
+	make -j16
+	
+	2 . do one of the following.
+	truncate -s %4096 u-boot.bin
+
+		OR
+
+	dd if=u-boot.bin of=u-boot-4k.bin bs=4k seek=1 && truncate -s %4096 u-boot-4k.bin && mv u-boot-4k.bin u-boot.bin
+
+# EDISON
+=========
+
+	1 . set following env 
+	setenv dfu_alt_info "ifwi${hardware_id} raw 0 8192 rawpart 1;ifwib${hardware_id} raw 0 8192 rawpart 2;u-boot0 part 0 1;u-boot-env0 part 0 2;u-boot1 part 0 3;u-boot-env1 part 0 4;boot part 0 7;rootfs part 0 8;update part 0 9;home part 0 10;vmlinuz fat 0 7;initrd fat 0 7"
+
+setenv do_dfu_alt_info_ifwi 'setenv dfu_alt_info "ifwi${hardware_id} raw 0 8192 rawpart 1;ifwib${hardware_id} raw 0 8192 rawpart 2"'
+
+setenv do_dfu_alt_info_mmc 'setenv dfu_alt_info "ifwi${hardware_id} raw 0 8192 rawpart 1;ifwib${hardware_id} raw 0 8192 rawpart 2;u-boot0 part 0 1;u-boot-env0 part 0 2;u-boot1 part 0 3;u-boot-env1 part 0 4;boot part 0 7;rootfs part 0 8;update part 0 9;home part 0 10;vmlinuz fat 0 7;initrd fat 0 
+	
+	2 .  Run following utility
+	run do_force_flash_os
+
+# HOST 
+=======
+	dfu-util -v -d 8087:0a99 --alt u-boot0 -D u-boot.bin
+

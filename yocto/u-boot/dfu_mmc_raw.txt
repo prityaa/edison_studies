@@ -1,0 +1,5 @@
+setenv dfu_alt_info "ifwi${hardware_id} raw 0 8192 rawpart 1;ifwib${hardware_id} raw 0 8192 rawpart 2;u-boot0 part 0 1;u-boot-env0 part 0 2;u-boot1 part 0 3;u-boot-env1 part 0 4;boot part 0 7;rootfs part 0 8;update part 0 9;home part 0 10;vmlinuz fat 0 7;initrd fat 0 7"
+
+setenv do_dfu_alt_info_ifwi 'setenv dfu_alt_info "ifwi${hardware_id} raw 0 8192 rawpart 1;ifwib${hardware_id} raw 0 8192 rawpart 2"'
+
+setenv do_dfu_alt_info_mmc 'setenv dfu_alt_info "ifwi${hardware_id} raw 0 8192 rawpart 1;ifwib${hardware_id} raw 0 8192 rawpart 2;u-boot0 part 0 1;u-boot-env0 part 0 2;u-boot1 part 0 3;u-boot-env1 part 0 4;boot part 0 7;rootfs part 0 8;update part 0 9;home part 0 10;vmlinuz fat 0 7;initrd fat 0 7"'
