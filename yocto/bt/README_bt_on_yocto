@@ -1,0 +1,1315 @@
+build sys :
+	git clone
+
+
+1 .
+The Morty, Pyro, Rocko and Sumo branches are experimental. Currently they build. install and boot. For Morty the separate parts (u-boot, kernel and rootfs) must be installed manually. After Pyro this is optional, you can use flashall or Flash Tool Lite and overwrite your factory image.
+
+In the following we will assume you want to use the latest (Sumo) and will only mention deviations for the older versions when absolutely needed.
+
+When you install everything manually, the only permanent change is the u-boot update, and that should not affect your ability to run your factory Edison Image. The kernel will be installed in a partition that is currently unused (the oversized OTA partition) and the rootfs on an external sd card or USB stick.
+
+With the manual installation and the rootfs on external card or disk you must press ESC during boot and type a command to boot the external Sumo image. If you don’t the factory image will boot automatically.
+
+If you use flashall or Flash Tool Lite the factory image is gone, but your new Sumo will boot automatically.
+
+We recommend trying the manual installation first and after you have established that you like it better then factory, then make the changes permanent.
+Not breaking Home partition
+
+The home partition is shared between your existing image and the new image. Remember that when you are doing destructive operations in the home directory.
+Security
+
+Consider that the Edison allows you only to log in as root, and no root password is set. You know what can come of that. To secure the device, as a starting point you probably would like to create a user account, assign that sudo privileges, and configure sshd so that root logins are forbidden. This will still allow you to login via the console (the terminal connected via USB).
+Unbreaking things
+
+In case things go wrong, you can take the sd card, plug it in your computer (it is formatted as ext4, so under Windows that might not be so easy) and fix things from there.
+
+If you really mess up the device, for instance by installing a broken u-boot (I did this), or break the u-boot environment variables in such a way that nothing boots, I provide the recovery tools and an image (or you can recover your own if you like). Note that recovery here means recover the Edison so that it will boot again. All the partitions will be wiped, so if you have anything important on the device, you might want to back that up in advance.
+
+Nevertheless, you might find ways to break the Edison that nobody thought off. In that case, I told you so, and you get to keep the pieces.
+Not upgrading
+
+With that out the way: the original Edison kernel has the same potential to break things, is badly secured and the image software is based on sources that is many years old (i.e. has many known security issues). At least Yocto Morty and later are being actively maintained. And the kernel applied here is for now not more than 10 weeks behind the latest official Vanilla release.
+
+1.2 .
+
+
+2 . prerequites
+================
+Prerequisites for building
+
+    Building branches prior to Thud
+    Building the Thud branches
+    Building under Windows (10)
+        Ubuntu for Windows
+        Virtualbox
+        CROss PlatformS (CROPS)
+
+Building branches prior to Thud
+
+Checkout the Sumo branch for documentation.
+Building the Thud branches
+
+Yocto Thud will build on Ubuntu Cosmic (18.10), despite a warning that this is untested.
+
+Install the required build environment (may be a bit to much):
+
+sudo apt-get install gawk wget git-core diffstat unzip texinfo gcc-multilib build-essential chrpath socat cpio python python3 libsdl1.2-dev xterm python3
+
+Building under Windows (10)
+Ubuntu for Windows
+
+I have tried building using Ubuntu for Windows, with no succes. Appearently Windows translation layer does not fully support all properties of a linux file system.
+Virtualbox
+
+If you want to get started quickly, you are probably better off installing a virtual machine (like Virtualbox) with a suitable version of Ubuntu (I don’t want to start a flame war, but Kubuntu is really nice). Keep in mind that bitbake will produce 60GB - 100GB of files and a virtual machine will be substantially slower than building native. And native can take 2.5 (ssd) - 6 (hdd) hours when building all from scratch.
+CROss PlatformS (CROPS)
+
+CROPS uses Docker Containers, on Windows this is done by running a linux kernel in a Virtual Machine (VM) then running containers in linux. In the end it is still a VM, which associated slowness, but without the desktop that Virtualbox provides.
+
+    Go to the Docker Installation website and download Docker for Windows (Stable). Docker is a software container platform that you need to install on the host development machine.
+
+    Set Up the Containers to Use the Yocto Project. Go to CROPS on github and follow the directions for your particular development host (i.e. Linux, Mac, or Windows).
+
+    Once you complete the setup instructions for your machine, you have the Poky, Extensible SDK, and Toaster containers available.
+
+2.1 : Setting up
+
+    Setting up
+    Cleaning up everything
+    Cleaning up just a single recipy
+
+Setting up
+
+1- Prepare your workspace:
+
+    mkdir my_Edison_Workspace
+
+2- Get this layer:
+
+    git clone git@github.com:htot/meta-intel-edison.git
+
+3- Make things easier with ‘make’:
+
+    ln -s meta-intel-edison/utils/Makefile.mk Makefile
+
+4- Checkout the version you want to use:
+
+    cd meta-intel-edison
+
+    git checkout master
+
+You can also checkout dizzy-uptodate, dizzy-latest, dizzy-rt or morty, pyro64, pyro64-acpi, rocko32, rocko64-acpi, sumo32 and sumo64-acpi (all frozen) or thud
+
+Master/thud is currently a continuation of sumo32 with acpi enabled by default and for thud with enabled x86_64 on top of that.
+
+5- Download all the needed dependencies:
+
+    make setup
+
+Warning: only use make image or flash using make flash on rocko or later
+
+You only need to run make setup once. However, if you run it again the additionally downloaded layers will be pulled again from the source. Setting up again will also clean up everything causing everything to be rebuild. That might be a good thing, if you are prepared to wait a few hours for everything to rebuild.
+
+If you only want pull the latest changes but not rm -rf out use make update.
+Cleaning up everything
+
+From time to time bitbake gets mixed up on what to build. This happens for instance when you switch Yocto version.
+
+I didn’t find a real easy way to clean up everthing with bitbake (i.e. similar to make clean). It most cases that won’t be needed anyway. What seems to work for now is:
+
+    make clean
+
+    rm -rf bbcache/sstate-cache/*
+
+    make setup
+
+This will delete everything in out, remove the sstate-cache, but keep all the downloaded packages.
+Cleaning up just a single recipy
+
+When working on a recipy (for instance u-boot), bitbake might not detect the change and refuse to rebuild the recipy f.i. when you change the bitness (from 32 -> 64 or vv.). In that you can clean the complaining recipe using:
+
+    bitbake -c cleansstate u-boot
+
+    bitbake -c cleansstate linux-yocto
+
+2.2 : ACPI
+
+    ACPI or no-ACPI?
+        What are pinmuxes and why do I care?
+        And ACPI?
+        Why ACPI and no-ACPI?
+        Enabling ACPI
+    ACPI tables
+        Building
+        Configuring
+        Loading the ACPI tables
+            Preloading by U-Boot
+            Run time loading through configfs
+        Debugging
+
+ACPI or no-ACPI?
+Note: In Thud ACPI is switched on by default and the acpi removed from DISTRO_FEATURES. For instructions on building a non-ACPI version checkout the sumo32 branch. A good reason would be if the ACPI doesn’t cover your needs yet and you need to build a version without. This would be the case if you need to use the MRAA and UPM librairies
+
+The factory supplied kernel allowed setting pinmuxes from user space through debugfs. The vanilla linux kernel does not allow this. Of course it is allowed to write a driver or modify platform code to make sure that it configures pinmuxes as required for your application.
+What are pinmuxes and why do I care?
+
+A pinmux is like a switch that allows a certain CPU pin to have multiple functions. In linux pinmuxes are controlled from the pinctrl subsystem that can not be controlled from user space without a driver. Other aspects of a CPU pin are controlled from the gpio subsystem and can be controlled from user space. From the linux Documentation/driver-api/pinctl.rst:
+
+    From a kernel point of view, however, these are different aspects of the hardware and shall be put into different subsystems:
+
+        Registers (or fields within registers) that control electrical properties of the pin such as biasing and drive strength should be exposed through the pinctrl subsystem, as “pin configuration” settings.
+        Registers (or fields within registers) that control muxing of signals from various other HW blocks (e.g. I2C, MMC, or GPIO) onto pins should be exposed through the pinctrl subsystem, as mux functions.
+        Registers (or fields within registers) that control GPIO functionality such as setting a GPIO’s output value, reading a GPIO’s input value, or setting GPIO pin direction should be exposed through the GPIO subsystem, and if they also support interrupt capabilities, through the irqchip abstraction.
+
+Information on pinmux modes can be found Hardware Guide for the Intel® Edison Kit for Arduino*.
+
+The Edison Arduino also has muxes on the PCB that are controlled by setting GPIO pins high or low as well as I2C GPIO expanders that provide additional GPIO’s.
+
+To access functions like the UART, I2C-6 and SPI bus the pinmux mode must be set by the kernel from the default function set by Edison firmware (GPIO) to the desired function through platform code which sets the desired mode permanently.
+And ACPI?
+
+Ultimately this type of platform code should go into ACPI tables. ACPI tables are normally served by BIOS. However U-Boot can also do this. Further, additional ACPI tables can be loaded into the kernel at a later time. We can build an ACPI enabled version of U-Boot with tables describing the SoC and additional ACPI tables describing the Edison Arduino. The latter are installed into the initramfs and loaded through configfs right after boot and prior to switching the rootfs.
+
+    ACPI tables can be loaded at any time, it is not a requirement to put them into the initramfs. Putting them in initramfs and loading through configfs does load them as early as possible without resorting to a seperate initrd. Also, loading from configfs has the advantage that the tables can be unloaded/reloaded at run time.
+
+Enabling the UART as a 2 wire (RX/TX), 4 wire (RX/TX/CTS/RTS) device as well as the SPI and I2C device are build options in meta-acpi. We set these options in meta-intel-edison-bsp/conf/machine/edison.conf. Currently we have:
+
+ACPI_TABLES ?= "arduino.asl spidev.asl"
+ACPI_FEATURES ?= "uart_2w spi"
+
+ACPI_TABLES has the list of asl’s compiled amd built into the initramfs and loaded at boot.
+ACPI_FEATURES sets the options used when compiling the asl. Currently supported are uart_2w, uart_4w, i2c, spi
+
+In the future, additional ACPI tables can be added to meta-acpi.
+
+The ACPI enabled U-Boot only has effect when the ACPI enabled kernel is also built and used. Note the following points:
+
+    The kernel called non-acpi is a vanilla kernel and actually does have acpi. What we mean is that it is missing some additional patches that will allow it to work with the acpi enabled U-Boot.
+    When you flash the generated image using flashall or Flash Tool Lite you will always have a matching U-Boot and kernel.
+    When you flash U-Boot manually or boot a kernel manually using edsboot or usbboot you can get combinations of acpi and non-acpi U-Boot and kernel. This will have the following effect:
+
+U-Boot 	kernel 	boot result
+non-acpi 	non-acpi 	boots, with i2c-6, uses SFI
+non-acpi 	acpi 	boots, no i2c-6, uses SFI
+acpi 	non-acpi 	boots only with ‘acpi=off’ on kernel command line, with i2c-6, uses SFI
+acpi 	acpi 	boots, with i2c-6, uses ACPI
+
+Notes
+
+    Both U-Boot and kernel need to be ACPI enabled for ACPI to work.
+    An acpi kernel will run with non-acpi U-Boot. However without the patch that enables I2C-6.
+    An non-acpi kernel (including the factory provided one) will hang when run with ACPI enabled U-Boot, unless you provide acpi=off on the kernel command line.
+
+Why ACPI and no-ACPI?
+
+Some of the pinmuxes are protected by the SCU (System Controller Unit) and can currently not be changed using ACPI, in particular I2C bus 6. The non-acpi image has a patch to its kernel platform code that tells the SCU to change the pinmux. The acpi enabled image has a patch in U-Boot to do the same.
+
+Currently we are working on fixing this for the ACPI case. The status of this work can be followed at the Intel Edison Wiki.
+
+Work on providing non-acpi U-Boot patches will end with the release of U-Boot v2018.09 1). Efforts will from then on be focussed on the acpi U-Boot. Eventually this may lead to new non-acpi kernels to be unsupported.
+
+1) Work on non-acpi U-Boot is done mainly by Andy Shevshenko and can be tracked here
+Enabling ACPI
+
+In meta-intel-edison/meta-intel-edison-distro/conf/distro/poky-edison.conf add acpi to DISTRO_FEATURES.
+
+Alternatively you can checkout sumo64-acpi which will build a x86_64 acpi enabled version.
+ACPI tables
+Building
+
+Sample ACPI tables are provided by the meta-acpi layer in the recipes-bsp/acpi-tables/samples/edison/ folder. We have tables for defining gpio, i2c, ads7951 and spi through 2 tables: arduino and spidev.
+
+‘bitbake acpi-tables builds the cpio and puts that in the deploy folder out/current/build/tmp/deploy/images/edison/`
+Note: Currently bitbake does not pick up changes in the asl sources. During development you need to use bitbake -c cleansstate acpi-tables followed by bitbake acpi-tables. Also you need to use make image for the newly built tables to get actually included into the initramfs.
+Configuring
+
+In meta-intel-edison-bsp/conf/machine/edison.conf we have
+
+ACPI_TABLES ?= "arduino.asl spidev.asl"
+ACPI_FEATURES ?= "uart_2w i2c spi"
+
+ACPI_TABLES define which tables to build and include into the cpio, apci-tables.deb and initramfs. ACPI_FEATURES defines options you can turn on during the build, these are translated to the appropriate defines. Choices are:
+Option 	Description
+uart_2w 	Conffigures RxD and TxD for the HSU
+uart_4w 	Configures RxD, TxD, RTS and CTS for the HSU
+i2c 	Configures SCL and SDA for the I2c-6
+spi 	Configures pins for SPI
+Loading the ACPI tables
+Preloading by U-Boot
+
+You can pre-load the acpi-tables.cpio in the following way:
+
+setenv boot_edsboot 'zboot 0x100000 0 0x3000000 0x1000000'
+setenv bootargs_edsboot 'console=tty1 console=ttyS2,115200n8 rootfstype=ramfs rw'
+setenv bootcmd_edsboot 'setenv bootargs ${bootargs_edsboot}; run load_edsboot; run boot_edsboot'
+setenv load_edsboot 'load mmc 0:9 0x100000 vmlinuz.efi; load mmc 0:9 0x3000000 acpi-tables.cpio'
+
+Note: The acpi-tables.cpio must be an uncompressed cpio.
+Note: If you you need multiple cpios (to hold an initramfs), the first one must be the acpi-tables.cpio. You can concatenate multiple compressed cpio’s to that one. See the kernel Documentation/acpi/ssdt-overlays.txt.
+Note: If the kernel has a built-in initramfs the U-Boot loaded acpi-tables.cpio will be used first.
+Note: If you get boot errors showing similar like ‘garbage in uncompressed archive’ probably the kernel is overwriting your cpio and you need to select a higher address.
+Run time loading through configfs
+
+Configfs allows to allow to load ssdt tables from user space, see kernel Documentation/acpi/ssdt-overlays.txt. This is done on edison automatically by incorporating the tables into the initramfs and loading them into the kernel as early as possible.
+Debugging
+
+In theory acpi tables loaded through configfs can also be unloaded by using:
+
+rmdir /sys/kernel/config/acpi/table/arduino
+rmdir /sys/kernel/config/acpi/table/spidev
+
+Currently this is generating a kernel crash.
+
+To facilitate debugging there is a kernel command line option skiptables that causes loading on the acpi tables inside the initramfs to be skipped. This allows a quicker debug cycle. Add the option for instance to the acpi environment variable:
+
+fw_setenv acpi 'quiet skiptables'
+
+After building acpi-tables.deb (see above), install it on the image manually using dpkg -i acpi-tables.deb. Alternatively copy the tables to /kernel/firmware/acpi/ manually.
+
+acpi-tables.deb installs acpi-tables-load which can be manually used to load the table.
+Note: If you prefer loading the acpi tables automatically, but want to be able to change them without rebuilding the kernel, systemd can load them using systemctl enable acpi-tables-load` once.
+
+2.4 : i686 or x86_64?
+
+    32 bits or 64 bits operation
+        Advantages of running in x86_64 mode
+        Disdvantages of running in x86_64 mode
+        Enabling x86_64 mode
+
+32 bits or 64 bits operation
+
+The Edison main SoC is a 22 nm Intel Atom “Tangier” (Z34XX) that includes two Atom Silvermont (SLM) cores. Although never advertised by Intel, the CPU is known to be 64 bits (x86_64) capable.
+Advantages of running in x86_64 mode
+
+    In x86_64 mode certain instructions become available that might substantially speed up your application. Using these instructions will probably require effort on your part. But take care: on Silvermont it appears to be quite easy to destroy the obtained performance enhancement, see Disadvantage … below.
+    In x86_64 there are more registers available to the compiler, making it easier to generate optimized code.
+    In the far future linux might drop 32 bit support entirely. Assuming you are still using your Edison then, having 64 bit support might become a necessity. In the meanwhile you may experience less rigorously tested code on i686 with associated bugs.
+
+Examples where code optimizations have been done specific to Edison / x86_64 have been implemented 1):
+Base64 encoding/decoding
+CRC32C encoding/decoding
+
+1) Feel free to add Edison / NUC E3815 or other Baytrail examples here.
+Disdvantages of running in x86_64 mode
+
+There are quite a number of disadvantages:
+
+    All code compiled for x86_64 is larger in size, both on disk as well as in memory.
+    Interrupt latency for the HSU appears to be substantially longer, causing char’s to be lost at baud rate > 500kb.
+    Certain code may actually run substantially slower on SLM architectures.
+
+From the Intel® 64 and IA-32 Architectures Optimization Reference Manual 16.2.1.2:
+
+        The total length of the instruction bytes that can be decoded each cycle varies by microarchitecture.
+        SLM: up to 16 bytes per cycle with instruction not more than 8 bytes in length. For an instruction length exceeding 8 bytes, only one instruction per cycle is decoded on decoder 0.
+        An instruction with multiple prefixes can restrict decode throughput. The restriction is on the length of bytes combining prefixes and escape bytes. There is a 3 cycle penalty when the escape/prefix count exceeds the following limits as specified per microarchitectures.
+        SLM: the limit is 3 bytes.
+        Only decoder 0 can decode an instruction exceeding the limit of prefix/escape byte restriction on the Silvermont and Goldmont microarchitectures.
+        The maximum number of branches that can be decoded each cycle is 1 for SLM. Prevent a re-steer penalty by avoiding back-to-back conditional branches.
+
+Unfortunately x86_64 mode will add a prefix byte to instructions that are already long. For instance CRC32Q will exceed the limit causing a 3 cycle penalty, which totally destroys the obtained performance enhancement.
+
+Fortunately there is a way around this restriction. Again from the Intel manual 16.2.1.4, engauging the Loop Stream Detector (LSD):
+
+    The Silvermont and Goldmont microarchitectures include a Loop Stream Detector (LSD) that provides the back end with uops that are already decoded. This provides performance and power benefits. When the LSD is engaged, front end decode restrictions, such as number of prefix/escape bytes and instruction length, no longer apply.
+
+It appears the LSD can kick in for short loops, and after a certain amount of loops occured (although this is not clearly documented the number is probably 64). To use this, take care not to have the compiler unroll your loop. The effect can be quite dramatic, as the 3 cycle penalty is eliminated after 64 iterations a a 3x speed up can be observed for long running loops.
+Enabling x86_64 mode
+
+In meta-intel-edison/meta-intel-edison-bsp/conf/machine/edison.conf change KBUILD_DEFCONFIG="x86_64_defconfig" and set DEFAULTTUNE = "core2-64".
+
+Alternatively you can checkout thud which will build a x86_64 acpi enabled version.
+
+
+3 . Building and installing the image
+=====================================
+
+    Building the image
+    Flashing the image
+
+Building the image
+
+Change to the correct directory as instructed by the make setup script (see Setting up).
+
+    cd /.../my_Edison_Workspace/test/out/linux64
+
+    source poky/oe-init-build-env
+
+Note: you need to source oe-init-build-env from every new konsole that you want to use to run bitbake.
+
+    bitbake -k edison-image
+
+Alternatively, from the same directory as make setup:
+
+    make image
+
+make image has the advantage that it will always clean and rebuild kernel and U-Boot.
+Note: If you are changing kernel or U-Boot configs this will be a necessary thing to do. But if you are just working on recipies that will appear on the rootfs, using bitbake directly will be quicker. Also bitbake -k will continue building as many recipies as possible when errors are encountered, which can be convenient during development.
+
+The results of bitbake will be found in out/current/build/tmp/deploy/images/edison/ which is what we will be using when installing manually to enable booting from SDHC or USB drive.
+
+make image will in addition run the postbuild.sh script, which will create a complete image in out/current/build/toFlash/ ready for flashing using flashall or Flash Tool Lite.
+Flashing the image
+
+Instruction for flashing the complete image will appear here.
+
+3.2 Building and installing the rootfs to SDHC or USB
+
+    Building the rootfs
+    Installing the rootfs on a sd card
+    Booting the rootfs on the external disk
+
+The following procedure is useful during development. Instead of flashing all to the Edison eMMC the rootfs goes on an external SDHC or USB disk. This has the advantage that you will alsways have a bootable system from which you can inspect or modify stuf preventing your experimental system from booting. And if not, you can pull the disk and fix from your PC.
+Note: The disk is ext4 formated, so will be most easily accessed from a Linux system.
+Building the rootfs
+
+Change to the correct directory as instructed by the make setup script.
+
+    cd /.../my_Edison_Workspace/test/out/linux64
+
+    source poky/oe-init-build-env
+
+Note: you need to source oe-init-build-env from every new konsole that you want to use to run bitbake.
+
+    bitbake -k edison-image
+
+Alternatively, from the same directory as make setup:
+
+    make image
+
+or make flash, make sdk, see further on.
+Installing the rootfs on a sd card
+
+You will find the image here:
+
+    tmp/deploy/images/edison
+
+The rootfs is edison-image-edison.ext4. This you can write to your sdcard.
+Note: The device should not be mounted when writing to /dev/sdX. Please check if mounted in advance.
+
+    mount
+
+And if necessary unmount:
+
+    sudo umount /dev/sdX
+
+Take care: the following command will erase everything on your sdcard:
+
+    sudo sh -c 'cat edison-image-edison.ext4 >/dev/sdX' && sync
+
+Note: All over the internet you will find the following or similar which will do exactly the same, except substantially slower:
+
+    sudo dd bs=1M if=edison-image-edison.ext4 of=/dev/sdX && sync
+
+Make absolutely sure you know the device representing the sdcard, on my system it was /dev/sdb.
+
+You need to check, repair and resize the disk after this. You can use GParted for this. On the command line it is:
+
+    sudo e2fsck -f -y -v -C 0 /dev/sdX
+
+and
+
+    sudo resize2fs -p /dev/sdX
+
+Booting the rootfs on the external disk
+
+The external disk probably has a different kernel as the one on your eMMC. The kernel modules will be mostly on the rootfs. So, to boot the external rootfs you will probably need to have the associated kernel boot first. These need to be installed manually, see the section Building and installing the kernel.
+
+3.3 Building and installing the kernel
+
+    Building the kernel
+    Installing the kernel
+    Booting the alternative kernels
+
+Building the kernel
+
+See the section Building and installing the image. Actually we are building 2 kernels bzImage-edison.bin and bzImage-initramfs-edison.bin
+
+The kernel with the built-in initramfs is called bzImage-initramfs-edison.bin and is the one we will be using. The initramsfs is a cpio built into the kernel containg kernel modules that are needed to boot from SDHC.
+
+According the Andy Shevchenko the kernel modules can not be built into the kernel:
+Note: Basically either you need to use special initramfs / initrd where you have all necessary modules and you use pivot_root to switch rootfs, or you compile in all those modules. Since one bug(?) in the regulator framework when you built-in sdhci-pci it will prevent to WiFi be enumerated, you have to workaround it [1] like
+
+echo 0000:00:01.3 > /sys/bus/pci/drivers/sdhci-pci/unbind
+echo 0000:00:01.3 > /sys/bus/pci/drivers/sdhci-pci/bind
+
+[1] https://communities.intel.com/message/419376#419376
+
+Instead we chose to use the initramfs. This has the additional advantage that is has a debugshell with busybox which will allow you to boot and investigate if your external image is not found or has problems.
+Installing the kernel
+
+We will put this on the internal mmc partition /dev/mmcblk0p9.
+
+Before you can copy the file there we need to format this partition. Don’t worry, this will not disturb operation of your current image as it was previously used for OTA (over the air) updates, but that feature is no longer supported.
+
+While running the original Intel® provided firmware, create a FAT file system on device 0:9. (If you don’t, and save files on the originally-available file system, they will not be visible from U-Boot.)
+
+    mkfs.vfat -F32 -I /dev/mmcblk0p9
+
+Reboot the Edison.
+
+Mount the Edison’s now-visible drive on the host computer (using the extra USB cable). Copy the just-built Linux image to the Edison drive:
+
+    cp tmp/deploy/images/edison/bzImage-initramfs-edison.bin /<path-to-Edison-drive>/bzImage-initramfs
+
+Note: Note: with the U-Boot environment we set bzImage-initramfs will boot the kernel for the SDHC and bzImage-initramfs-usb will boot the kernel for the USB.
+
+Alternatively, on the edison (with the original firmware):
+
+    mount /dev/mmcblk0p9 /mnt
+
+(Or, if the Edison already runs the morty firmware, copy the file to /boot, don’t forget to unmount and reboot after that).
+
+    mount /dev/mmcblk0p9 /mnt
+
+And if you have sshd running on the edison, from your host:
+
+    scp tmp/deploy/images/edison/bzImage-initramfs-edison.bin root@edison:
+
+Then on the Edison:
+
+    mv bzImage-initramfs-edison.bin /mnt/bzImage-initramfs
+    umount /mnt
+
+Or all the above from KDE’s Dolphin using the path fish://root@edison
+Booting the alternative kernels
+
+If you do nothing the image on the eMMC is booted automatically.
+
+There are 2 ways to boot the external image:
+
+    Interrupt U-Boot. In the first 1 sec. press escape. Then type:
+
+    run edsboot
+
+    for booting the SDHC, or
+
+    run usbboot
+
+    for booting the USB.
+
+    From a running system, reboot with a bootarg (this is being worked on see issue 45)
+
+    reboot sd
+
+    for booting the SDHC, or
+
+    reboot usb
+
+    for booting the USB.
+
+3.4 Building and flashing U-Boot
+
+    Building U-Boot using Yocto
+    Building U-Boot manually outside of Yocto
+        Background
+        Instructions for building
+    Flashing everything
+    Flashing only U-Boot
+    Fixing up the u-boot environment
+
+Building U-Boot using Yocto
+
+U-Boot is built automatically as part of the image building, see Building and installing the image. The recipe will be provide the latest U-Boot with acpi patches provided if required by the kernel (see ACPI or no-ACPI).
+Building U-Boot manually outside of Yocto
+Background
+Note: The following instructions are provided by Andy Shevshenko (0andriy) on the Edison community page https://communities.intel.com/message/432172#432172. They are currently out of date, but provided here for reference purposes. Keep in mind at present there is a edison and a edison-acpi branch.
+Warning: This work is not yet complete. However Andy is able to build a special version of u-boot with minimal amount of patches (already applied) that is able (and needed) to boot a vanilla Linux kernel (x86 and amd64) from v4.7 and higher.
+
+He also provides a kernel with patches applied to run on Edison out of the box.
+
+See:
+
+    https://communities.intel.com/thread/75472 (Intel forum on getting vanilla linux to work on Edison).
+    https://communities.intel.com/thread/107935 (Intel forum on updating u-boot)
+
+The status is being tracked here:
+
+    https://edison.internet-share.com/w/index.php?title=Using_a_vanilla_Linux_kernel_with_Intel_Edison&redirect=no.
+
+Instructions for building
+
+    Clone u-boot from https://github.com/andy-shev/u-boot/tree/edison
+
+    The current version is edison-v2017.05
+
+    git clone git@github.com:andy-shev/u-boot.git
+    cd u-boot
+    git checkout edison-v2017.05
+
+    To build:
+
+    make clean
+    make edison_defconfig
+    make -j8
+
+    If you never updated U-Boot you are still on v2014.04. In this case, or if you have edison-v2016.11, or edison-v2017.01 you need to do:
+
+    truncate -s %4096 u-boot.bin
+
+    otherwise skip this step.
+
+Flashing everything
+
+To flash everything you use either the script flashall.sh or the Intel Flash Tools Lite. This replaces U-Boot, the kernel in the boot partition, U-Boot environment and the rootfs.
+Note: You might be worried that you brick your Edison in some way. Never say never, but as long as U-Boot works you can always reflash your device. And if you break U-Boot both flashing tools have a recovery mode that re-flash U-Boot by utilizing the microkernel that loads U-Boot in the first place. See our Disaster recovery page for instructions how to do that and for a link to a working binary image.
+Flashing only U-Boot
+
+To flash the Edison Arduino board you need 2 USB connections.
+
+    Connect the first USB cable to the USB port marked as 3 in the photograph below.
+    This cable will be your serial connection to the Edison. To connect to the edison you might use a terminal emulator like gtkterm. The serial port is probably /dev/ttyUSB0 and the baud rate is 115200 with parity none. If you prefer the command line you can use screen /dev/ttyUSB0 115200.
+
+    The second cable to attach goes to the USB port marked as 2 in the photograph below.
+    This port is a special port that can act as USB host or USB slave of which only one is active at a time. As you will be connecting to a host port of your PC, it needs to be configured as slave on the Edison. Push the switch down in the direction of the micro USB ports so that the port is enabled. Alt tekst
+
+    On Ubuntu you might need to install the package dfu-util.
+
+    Press the reset button (under the text RESET in the picture above).
+
+    In your terminal press the ESC key to interrupt the boot process.
+
+    You will probably see:
+
+    U-Boot 2014.04 (Jun 06 2016 - 14:40:07)
+
+    Don't forget for 2014.04 you need to apply `truncate` as decribed above.
+
+    In your terminal type at the boot> prompt:
+
+    run do_force_flash_os
+
+    In a second terminal window:
+
+    sudo dfu-util -v -d 8087:0a99 --alt u-boot0 -D u-boot.bin
+
+    This will flash u-boot to the u-boot0 partition. In the first terminal window you may watch the flashing to complete.
+
+    #
+    DFU complete CRC32: 0xf340088e
+    DOWNLOAD ... OK
+    Ctrl+C to exit ...
+    boot > reset
+    resetting ...
+
+Fixing up the u-boot environment
+
+U-boot uses a sort of macro’s that you can run after you have interrupted the boot process (see run do_force_flash_os above). If you you are manually updating U-Boot, you probably want to run you new built image from the SD card or from USB. In that case you will need to make some changes manually to U-Boot’s environment because some keywords changed as well as add some command to boot the image on the SD card.
+
+Inside u-boot you can see this environment by using the command:
+
+    printenv
+
+From when running linux and logged into the Edison you can see the environment using:
+
+    fw_printenv
+
+You can change a line by using setenv/fw_setenv.
+
+    The following lines need to be changed since the keyword mmc has changed to raw. For example inside u-boot:
+
+setenv dfu_alt_info "ifwi${hardware_id} raw 0 8192 mmcpart 1; ifwib${hardware_id} raw 0 8192 mmcpart 2; u-boot0 part 0 1; u-boot-env0 part 0 2; u-boot1 part 0 3; u-boot-env1 part 0 4; boot part 0 7; rootfs part 0 8; update part 0 9; home part 0 10; vmlinuz fat 0 7; initrd fat 0 7"
+
+setenv do_dfu_alt_info_ifwi 'setenv dfu_alt_info "ifwi${hardware_id} raw 0 8192 mmcpart 1; ifwib${hardware_id} raw 0 8192 mmcpart 2"'
+
+setenv do_dfu_alt_info_mmc 'setenv dfu_alt_info "ifwi${hardware_id} raw 0 8192 mmcpart 1; ifwib${hardware_id} raw 0 8192 mmcpart 2;u-boot0 part 0 1; u-boot-env0 part 0 2; u-boot1 part 0 3; u-boot-env1 part 0 4; boot part 0 7; rootfs part 0 8;update part 0 9; home part 0 10;vmlinuz fat 0 7; initrd fat 0 7"'
+
+    Inside linux replace setenv with fw_setenv.
+
+    Inside u-boot you will want to permanently store the above using saveenv. Inside linux, the environment is automatically stored.
+
+    Further on you will like to boot the new kernel. Add the following commands:
+
+    fw_setenv edsboot 'setenv bootargs ${bootargs_edsboot}; run load_edsboot; run boot_edsboot'
+
+    fw_setenv bootargs_edsboot 'tty1 console=ttyS2,115200n8 root=/dev/mmcblk1 rootfstype=ext4 systemd.unit=multi-user.target hardware_id=00'
+
+    fw_setenv load_edsboot 'load mmc 0:9 0x100000 bzImage-initramfs'
+
+    fw_setenv boot_edsboot 'zboot 0x100000'
+
+    When we’re done you you be able to boot the new system using the command: run edsboot
+
+    The parameters root and rootfstype tell the initramfs init script to mount mmcblk1 (this should be your sdcard). It will wait for 30 seconds and search for /sbin/init on the rootfs. If the rootfs does not appear or init is not found it will mount all partitions possible and then fall back to a prompt for you to investigate the situation. The remaining parameters are passed on to the new init (systemd).
+
+3.5 : Disaster recovery
+
+    Flashall (old image)
+    Recovery
+
+Flashall (old image)
+
+If at any point you messed up the Edison or want to go back to the factory state, you need to flash the original image. The image actually consists of several parts, i.e. u-boot (boot loader), ifwi (intel firmware binaries), kernel and root file system. It should not be necessary except after you did Recovery (see below), but just in case of emergency you can download an Edison 2.1 image here.
+
+    Ungzip the file
+
+    Run sudo ./flashall.sh
+
+Recovery
+
+As described above, u-boot can update itself. However, if u-boot itself is broken (you built a non-functioning image) interrupted flashing, or whatever, it won’t boot, and consequently won’t be able to re-flash it self.
+
+Fortunately, u-boot is loaded by the PSH KERNEL (microkernel), and this can flash a new u-boot. For this the flashall script needs to be run with an option:
+
+    sudo ./flashall.sh --recovery
+
+The script will be requiring another tool, xfstk for which you can download the sources here: https://sourceforge.net/projects/xfstk/files/?source=navbar. Unfortunately this has not been updated since 2015-05-14. I found I needed to build that for an old version of Ubuntu, which on installation required an old library package. If you are in need of recovery, you must likely are in a hurry to fix things, so I provide a pre-packaged xfstk together with the required library that together install on the amd64 (64 bits version of) Ubuntu 17.04 (Zesty).
+
+To install on Ubuntu:
+
+    sudo dpkg -i libboost-pro*
+    sudo dpkg -i xfstk*
+
+After, installing flashall recovery should work.
+
+3.6 : What's in the rootfs and the initramfs images
+
+    What’s in the rootfs and the initramfs images
+
+What’s in the rootfs and the initramfs images
+
+Your mileage may vary. Roughly (updated 11-01-2019) in the thud branch:
+
+Initramfs Manifest https://github.com/htot/meta-intel-edison/blob/master/docs/core-image-minimal-initramfs-edison.manifest
+
+Rootfs Manifest https://github.com/htot/meta-intel-edison/blob/master/docs/edison-image-edison.manifest
+
+4 : Building and installing the SDK
+
+    Building the SDK
+    Installing the SDK
+    Using the SDK
+
+Building the SDK
+
+In the same directory as make setup:
+
+    make sdk
+
+Installing the SDK
+
+The SDK consists of an installer that you can install onto multiple machines.
+
+Assuming you have only one machine, it doesn’t make sense to install everything again.
+
+Instead you can do the following:
+
+    cd /opt
+    sudo ln -s <your top dir>/out/linux64/build/tmp/work/edison-poky-linux/edison-image/1.0-r0/sdk/image/opt/poky-edison poky-edison
+
+Now you probably have a work directory where you keep your project sources:
+
+    cd <your work dir>
+    ln /opt/poky-edison/2.4.2 ./2.4.2
+
+Now it will appear as if the SDK is installed into /2.4.2
+Using the SDK
+
+The SDK is initialized by running the script:
+
+    source <your work dir>/2.4.2/environment-setup-core2-64-poky-linux
+
+(for 64 bit target)
+
+or
+
+    source <your work dir>/2.4.2/environment-setup-core2-32-poky-linux
+
+(for 32 bit target)
+
+Once you have run this, compiler / linker etc are set to use the cross-compiler to build for the Edison with the Edison’s installed libraries in the sysroot.
+
+The effect is you can build on your local host with the same results as building locally on the Edison.
+
+
+5 : Current State
+Miscellaneous functions
+
+    systemd
+    sshd
+    blink-led
+    fw_setenv / fw_printenv
+    reboot
+    kernel command line
+    run-timezone
+
+systemd
+Click to unfold: Systemctl output
+sshd
+
+sshd starts automatically and allows login with the root account without password
+Note: This needs securing so that login with the root account is only possible from the console. We need to consider that root login over the network (sshd) or bluetooth (rfcomm) is insecure.
+blink-led
+
+systemctl start blink-led starts the blinking LED.
+fw_setenv / fw_printenv
+
+fw_setenv / fw_printenv allow accessing U-Boot variables just like setenv / printenv from the U-Boot console do.
+Click to unfold: Fw_printenv output
+reboot
+
+The reboot command can take an argument <bootargs>.
+
+This allows you to type reboot usb and reboot sdhc, which will perform either usbboot (boot kernel bzImage-initramfs-usb on mmcblk0p9 and rootfs from the usb drive sda) or edsboot (boot kernel bzImage-initramfs on mmcblk0p9 and rootfs from the SDHC card mmcblk0) respectively without the need to interrupt U-Boot from the console.
+
+This way you can reboot from ssh from a remote terminal into the image you want (without console).
+
+Other supported bootargs are boot, ota and flash (unchanged from the factory image).
+kernel command line
+
+The kernel is booted with a built-in initramfs. The init.sh script that runs with PID = 1 takes the follow parameters:
+Parameter 	Function
+debugshell 	Fall back to a busybox prompt after 30 seconds 1)
+debugshell=10 	Fall back to a busybox prompt after 10 seconds
+skiptables 	Skip loading ACPI tables 2)
+
+1) If there is a problem finding your rootfs you will be dropped in the busybox shell inside the initramfs so you can investigate if the file system needs repair, if there is a driver missing etc.
+
+2) If you install the acpi-tables package into edison-image you can install manually by running acpi-tables-load, or you can have systemd perform the load using systemctl enable acpi-tables-load. This is useful during ACPI tables development where you want quickly test without building a new kernel.
+run-timezone
+
+You can manually run run-timezone. This will use a location service (ipapi.co) to find your time zone and then set your time zone using timedatectl. There is also a systemd service called run-timezone.service which should run only once. This is currently not setup to run automatically. In the future this will run once when a working WAN connection is detected.
+
+5.2 : Networking functions
+
+    connman
+    Ethernet
+    Wifi
+    Wifi tethering
+    Gadget
+
+connman
+
+connman connects wifi and ethernet (SMSC9514 USB 4p+LAN hub) or ethernet-over-usb (gadget).
+
+You might need to systemctl enable connman && systemctl start connman once.
+Ethernet
+
+SMSC LAN9514 4p usb/ethernet hub works without configuration. But you can turn it off with connmanctl.
+
+connmanctl
+disable ethernet
+
+Wifi
+
+It may be soft blocked. To unblock use connmanctl.
+
+connmanctl
+enable wifi
+agent on
+enable wifi
+scan wifi
+services
+connect wifi_12345678_123......910_managed_psk
+
+and enter your password
+
+The following method to unblock works but I consider this obsolete:
+
+root@edison:~# rfkill list
+
+0: phy0: wlan
+        Soft blocked: yes
+        Hard blocked: no
+
+root@edison:~# rfkill unblock 0
+root@edison:~# rfkill list
+0: phy0: wlan
+        Soft blocked: no
+        Hard blocked: no
+
+To unblock wifi and bluetooth simultaneously:
+
+    rfkill unblock all
+
+Wifi tethering
+
+The current version of connmanctl take care of tethering without the use of hostapd. Therefore we removed hostapd. Instructions for enabling a wifi access point:
+
+connmanctl
+enable wifi
+tether wifi on <ssid> <passphrase>
+
+To quickly switch between Access Point and Wifi:
+
+ap-mode-toggle start | stop | status | toggle
+
+You must have manually setup a tether previously using connmanctl, the stored ssid and passphrase will be used.
+Gadget
+
+It may be powered off. To power on use connmanctl.
+
+connmanctl
+enable gadget
+services
+connect gadget_aabbccddeef1_usb
+
+To make a shared network you need to configure the host computer. On KDE5 (Kubuntu 18.10) create a new connection using Plasma Network Manager: net1 Make this network active only on the shared network device: net2 Select shared with other computers: net3 Other network manager based desktops will require similar steps.
+
+* 5.3 : Bluetooth functions
+
+    Bluetooth attach
+    Unblock the bluetooth device
+    Controlling bluetooth
+    Serial communication over bluetooth
+
+Bluetooth attach
+Note: This section applies only to the non-acpi enabled image.
+
+To get bluetooth working, you first need to attach it with the following command:
+
+systemctl start bluetooth_attach
+
+To enable it by default:
+
+systemctl start bluetooth_attach
+
+Warning: Do not use hciattach!
+
+This is an important step as it powers on the bluetooth module and causes the kernel to load the firmware. The device will be unpowered when btattach terminates.
+Unblock the bluetooth device
+
+Bluetooth may be soft blocked. To unblock:
+
+root@edison:~# rfkill list
+
+0: phy0: wlan
+         Soft blocked: no
+         Hard blocked: no
+1: hci0: bluetooth
+         Soft blocked: yes
+         Hard blocked: no
+root@edison:~# rfkill unblock 1
+root@edison:~# rfkill list
+0: phy0: wlan
+         Soft blocked: no
+         Hard blocked: no
+1: hci0: bluetooth
+         Soft blocked: no
+         Hard blocked: no
+
+Check the logs for the following:
+
+dmesg | grep -i blue
+
+Bluetooth: Core ver 2.22
+Bluetooth: HCI device and connection manager initialized
+Bluetooth: HCI socket layer initialized
+Bluetooth: L2CAP socket layer initialized
+Bluetooth: SCO socket layer initialized
+pci 0000:00:04.1: Registered Bluetooth device: hci_bcm
+Bluetooth: HCI UART driver ver 2.3
+Bluetooth: HCI UART protocol H4 registered
+Bluetooth: HCI UART protocol Broadcom registered
+Bluetooth: hci0: BCM: chip id 82
+Bluetooth: hci0: BCM: features 0x2f
+Bluetooth: hci0: BCM43341B0
+Bluetooth: hci0: BCM43341B0 (002.001.014) build 0000
+Bluetooth: hci0: BCM (002.001.014) build 0176
+Bluetooth: RFCOMM TTY layer initialized
+Bluetooth: RFCOMM socket layer initialized
+Bluetooth: RFCOMM ver 1.11
+
+Controlling bluetooth
+
+To connect to other devices use: bluetoothctl
+
+root@edison:~# systemctl start bluetooth
+root@edison:~# bluetoothctl
+[NEW] Controller 43:34:1B:00:1F:AC edison [default]
+Agent registered
+[bluetooth]# discoverable on
+Changing discoverable on succeeded
+[CHG] Controller 43:34:1B:00:1F:AC Discoverable: yes
+[bluetooth]# pairable on
+Changing pairable on succeeded
+[bluetooth]# scan on
+Discovery started
+[CHG] Controller 43:34:1B:00:1F:AC Discovering: yes
+[NEW] Device 00:0A:3A:71:BA:34 00-0A-3A-71-BA-34
+[bluetooth]# connect 00:0A:3A:71:BA:34
+Attempting to connect to 00:0A:3A:71:BA:34
+[CHG] Device 00:0A:3A:71:BA:34 Connected: yes
+
+and follow the instructions in Intel Edison Bluetooth Guide
+Serial communication over bluetooth
+
+I have succeeded in paring 2 BT 4.0 devices and failed in paring a BT 2.0 device. I was able to get a wireless terminal using the following command on the Edison:
+
+rfcomm watch /dev/rfcomm0 3 /sbin/agetty -L 115200 rfcomm0 xterm-256color
+
+and on the client (laptop):
+
+sudo rfcomm bind /dev/rfcomm0 ##:##:##:##:##:## 3
+
+screen /dev/rfcomm0 115200
+
+5.4 : I2C SPI HSU USB
+
+    I2C
+    SPI
+    HSU
+    GPIO
+    USB
+        Host mode
+        Gadget (device) mode
+
+I2C
+
+The Edison has 2 i2c channels that we can use, i2c-1 and i2c-6. i2c-1 is used by the Edison Arduino board itself to control level shifters, multiplexers etc. i2c-6 is routed to the Arduino headers. i2c-6 pinmux are already set as needed.
+Note: i2c-6 is enabled through U-Boot, see ACPI. You need to have i2c set in ACPI_FEATURES which will configure the pins associated to i2c-6 in the correct mode.
+Warning: For non-ACPI pin configuration checkout the branch sumo32 and follow the instructions there.
+
+To test i2c you need to insert the module i2c-dev first:
+
+modprobe -i i2c-dev
+
+To detect all i2c channels:
+
+i2cdetect -l
+#i2c-3   i2c             Synopsys DesignWare I2C adapter         I2C adapter
+#i2c-1   i2c             Synopsys DesignWare I2C adapter         I2C adapter
+#i2c-6   i2c             Synopsys DesignWare I2C adapter         I2C adapter
+#i2c-4   i2c             Synopsys DesignWare I2C adapter         I2C adapter
+#i2c-2   i2c             Synopsys DesignWare I2C adapter         I2C adapter
+#i2c-7   i2c             Synopsys DesignWare I2C adapter         I2C adapter
+#i2c-5   i2c             Synopsys DesignWare I2C adapter         I2C adapter
+
+Show the devices detected on a channel:
+
+i2cdetect -y -r 1
+root@edison:~# i2cdetect -y -r 1
+     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f
+00:          -- -- -- -- -- -- -- -- -- -- -- -- --
+10: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+20: UU UU UU UU -- -- -- -- -- -- -- -- -- -- -- --
+30: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+40: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+50: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+60: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+70: -- -- -- -- -- -- -- --
+
+i2c-1 works, the devices shown as UU are the multiplexers on the Arduino board.
+
+root@edison:~# i2cdetect -y -r 6
+     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f
+00:          -- -- -- -- -- -- -- -- -- -- -- -- --
+10: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+20: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+30: -- -- -- -- -- -- -- -- -- 39 -- -- -- -- -- --
+40: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+50: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+60: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+70: -- -- -- -- -- -- -- --
+
+i2c-6 is also working and shows a TSL2561 sensor at address 0x39.
+SPI
+
+SPI should be working but we haven’t tested this with hardware. Feedback here will be much appreciated.
+HSU
+
+The high speed UART works, except that on the x86_64 (64b) image the HSU seems to be a bit slow to enable dma when receiving a character. The result is that above 500kb/s the FIFO will overflow sometimes and you will loose characters. When this happens the kernel will insert a \00 char at the beginning of the buffer.
+Note: For the ACPI enabled image the HSU is enabled through ACPI. You need to have either uart_2w or uart_4w set in ACPI_FEATURES which will configure the pins associated to HSU in the correct mode for either RX/TX or RX/TX/RTS/CTS mode.
+GPIO
+Note: For the ACPI enabled image pins can be configured using libgpiod
+
+Commands included in libgpiod are gpiodetect, gpiofind gpioget, gpioinfo, gpiomon, gpioset.
+
+For instance, to set TRI_STATE_ALL high:
+
+gpioset `gpiofind TRI_STATE_ALL`=1
+
+USB
+
+With linux 4.20 USB works in dual role mode which means it can act either as a device or as a host. In addition it has OTG (On The Go), meaning it can detect the role depending on the type of cable and device at the other end of the cable. For the Edison Arduino the mode is determined by the position of Switch 1 as it has a standard Type A USB plug for host mode and a standard micro B USB plug for device mode. The Edison Breakout board has a micro AB OTG connector to enable automatic selection of the mode.
+Host mode
+
+You can use this mode to connect a USB ethernet dongle. Hubs based on smsc95xx (AKA LAN 9514) provide 4 USB ports and 1 10/100 Ethernet port and works out of the box, providing almost 100Mb/s. You can also connect USB sticks and ftdi based serial port dongles.
+Gadget (device) mode
+
+In Gadget mode you can connect the Edison to your PC and the PC will detect a multi-function device. Current we have:
+
+    Ethernet over USB connection (see Networking functions).
+    The network connection has been verified to work with Linux hosts. More work may be needed with Windows based hosts. The speed of the network connection is expected to be in the order of 200Mb/s.
+    Mass storage device.
+    The partition that is shared is the boot partition (/dev/mmcblk0p9)
+    Serial port over ethernet.
+    To make this work, on the host: echo 0x1d6b 0x0104 >/sys/bus/usb-serial/drivers/generic/new_id, this creates a new /dev/USBx port.
+    On Edison put a tty on the newly created port ttyGS0 with /sbin/agetty -L 115200 ttyGS0 xterm-256color.
+
+The Gadget functions are created by the script conf-gadget.sh in a dedicated directory GADGET_BASE_DIR in configfs. Whenever the USB port goes into Gadget mode this script is called from the udev rule gadget.rules. The Gadget functions persist when going to Hode mode, so the directory in configfs is only written once. Script and rule are provided by recipe gadget in meta-intel-bsp.
+
+5.5 : MRAA and UPM
+
+    MRAA
+        HSU
+        I2C
+        GPIO
+    UPM
+    Example using UPM and MRAA on the TSL2561
+        C example building on the Edison
+        Nodejs example on the Edison
+        Python3 example on Edison
+        C example building with the SDK
+
+MRAA and UPM are libraries that simplify the development of applications that interface with sensors. Documentation can be found here.
+MRAA
+
+MRAA 1.9 is installed with support for C/C++ and additional packages are built to support python3 and nodejs.
+Note: These additional packages are not installed by default. You can find these under out/linux64/build/tmp/work/<arch>-poky-linux/mraa/1.9.0-gitAUTOINC+nnnn-r0/deploy-debs/<arch>/ for manual installation.
+
+For manual installation use:
+
+dpkg -i node-libmraa.deb
+
+or
+
+dpkg -i python3-libmraa.deb
+
+Alternatively, add these packages to edison-image.bb for automatic installation into you image.
+HSU
+
+High speed uart (HSU) works.
+I2C
+
+I2C should be working but I haven’t tested that yet with real hardware using MRAA.
+GPIO
+
+Settings GPIO’s works with the non-ACPI image only.
+Note: For the ACPI enabled image MRAA functions related to pin configuration will fail due to pin numbering being replaced by pin naming. MRAA needs to be updated for the ACPI enabled platform. Currently for the ACPI enabled image we recommend to use libgpiod
+
+Selecting a pinmux on vanilla linux is supposed to be done by devicetree or ACPI, which has been disabled that in mraa for Linux kernels > 4.0. Currently we have I2C, SPI and HSU selectable configurations available in the form of ACPI tables. For the non-ACPI image, I2C and HSU pinmuxes are preset in the platform code in the kernel.
+UPM
+
+UPM 1.6 is installed with support for C/C++ and additional packages are built to support python3 and nodejs.
+Note: These additional packages are not installed by default. You can find these under out/linux64/build/tmp/work/<arch>-poky-linux/upm/1.6.0-gitAUTOINC+cc7fec9ae0-r0/deploy-debs/<arch>/ for manual installation.
+
+For manual installation use:
+
+dpkg -i node-upm.deb
+
+or
+
+dpkg -i python3-upm.deb
+
+Alternatively, add these packages to edison-image.bb for automatic installation into you image.
+Example using UPM and MRAA on the TSL2561
+
+The UPM documentation is very comprehensive, but does not give you a walk through on how to start. In the following we hope to provide step-by-step instructions for a sample sensor, the TSL2561, which is a simple I2C based light sensor.
+Note: On the ACPI enabled image you need to modprobe -i i2c-dev before running any of the code below. On the non-ACPI enabled image, don’t forget to run the I2C script
+C example building on the Edison
+
+In the UPM repository you can find the following sample code:
+
+//Modified: Abhishek Malik <abhishek.malik@intel.com>
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include "tsl2561.h"
+
+#include "upm_utilities.h"
+
+#define TSL2561_Address 0x39
+
+int main()
+{
+    tsl2561_context dev = tsl2561_init(6, TSL2561_Address, GAIN_0X, INTEGRATION_TIME1_101MS);
+    float abc = 0;
+    if(tsl2561_get_lux(dev, &abc) != UPM_SUCCESS){
+        printf("ERROR !! ERROR !! ERROR!!");
+    }
+    printf("value retrieved: %f\n", abc);
+
+    return 0;
+}
+
+We need to modify the bus to i2c-6 and the address to 0x39 for this example to work.
+
+On Edison build using:
+
+gcc -I /usr/include/upm/ -lupmc-tsl2561  tsl2561.c
+
+Then run
+
+root@edison:~# ./a.out
+value retrieved: 12.000000
+
+Nodejs example on the Edison
+
+On Edison we need to make the tsl2561 module known to node:
+
+npm install /usr/lib/node_modules/jsupm_tsl2561/
+
+The example code needs similar modification as the C version.
+
+/*
+* Author: Zion Orent <zorent@ics.com>
+* Copyright (c) 2014 Intel Corporation.
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
+
+var digitalLightSensor = require('jsupm_tsl2561');
+
+// Instantiate a digital light sensor TSL2561 on I2C
+var myDigitalLightSensor = new digitalLightSensor.TSL2561(6, 57, 0, 1);
+
+
+setInterval(function()
+{
+	console.log("Light value is " + myDigitalLightSensor.getLux());
+}, 1000);
+
+// Print message when exiting
+process.on('SIGINT', function()
+{
+	console.log("Exiting...");
+	process.exit(0);
+});
+
+Then run:
+
+root@edison:~# node tsl2561.js
+Light value is 4712
+Light value is 4715
+Light value is 4661
+Light value is 3546
+Light value is 509
+Light value is 208
+Light value is 76
+Light value is 118
+Light value is 3919
+
+Python3 example on Edison
+
+The example code needs similar modification as the C version.
+
+#!/usr/bin/env python
+# Author: Zion Orent <zorent@ics.com>
+# Copyright (c) 2015 Intel Corporation.
+#
+# Permission is hereby granted, free of charge, to any person obtaining
+# a copy of this software and associated documentation files (the
+# "Software"), to deal in the Software without restriction, including
+# without limitation the rights to use, copy, modify, merge, publish,
+# distribute, sublicense, and/or sell copies of the Software, and to
+# permit persons to whom the Software is furnished to do so, subject to
+# the following conditions:
+#
+# The above copyright notice and this permission notice shall be
+# included in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+# NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+# LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+# OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+# WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+from __future__ import print_function
+import time, sys, signal, atexit
+from upm import pyupm_tsl2561 as upmTsl2561
+
+def main():
+    # Instantiate a digital light sensor TSL2561 on I2C
+    myDigitalLightSensor = upmTsl2561.TSL2561(6, 57, 0, 1)
+
+    ## Exit handlers ##
+    # This function stops python from printing a stacktrace when you hit control-C
+    def SIGINTHandler(signum, frame):
+        raise SystemExit
+
+    # This function lets you run code on exit, including functions from myDigitalLightSensor
+    def exitHandler():
+        print("Exiting")
+        sys.exit(0)
+
+    # Register exit handlers
+    atexit.register(exitHandler)
+    signal.signal(signal.SIGINT, SIGINTHandler)
+
+    while(1):
+        print("Light value is " + str(myDigitalLightSensor.getLux()))
+        time.sleep(1)
+
+if __name__ == '__main__':
+    main()
+
+Then run:
+
+root@edison:~# python3 tsl2561.py
+Light value is 109
+Light value is 61
+Light value is 17165
+Light value is 25085
+Light value is 21554
+Light value is 101
+Light value is 177
+Light value is 110
+
+C example building with the SDK
+
+You need to prepare the working directory for the SDK.
+
+After this, put the C source example along with a suitable make file.
+
+OBJECTS =
+
+ifdef DEBUG
+  OPT_FLAGS= -g -O0
+else
+  OPT_FLAGS=-O3 -DNDEBUG -flto
+endif
+INCDIRS = -I=/usr/include/upm/
+WARNING_FLAGS=-Wall -Wextra -Wno-sign-compare
+CXXFLAGS+= $(WARNING_FLAGS) $(OPT_FLAGS) $(INCDIRS)
+CFLAGS+= $(WARNING_FLAGS) $(OPT_FLAGS) $(INCDIRS)
+
+BINARIES=tsl2561
+all: $(BINARIES)
+
+tsl2561: tsl2561.o $(OBJECTS)
+	$(CXX) -o $@ $^ $(CXXFLAGS) -lupmc-tsl2561
+
+clean:
+	$(RM) $(BINARIES) *.o
+
+%.o: %.c
+	$(CC) $(CFLAGS) -o $@ -c $<
+
+%.o: %.cc
+	$(CXX) $(CXXFLAGS) -o $@ -c $<
+
+and run make all.
+
+The copy tsl2561 to Edison and:
+
+root@edison:~# ./tsl2561
+value retrieved: 0.000000
+root@edison:~# ./tsl2561
+value retrieved: 14.000000
+root@edison:~# ./tsl2561
+value retrieved: 1523.000000
+
