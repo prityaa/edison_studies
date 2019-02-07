@@ -1,0 +1,174 @@
+Using a vanilla Linux kernel with Intel Edison
+
+
+The Intel® Edison comes preloaded with a Linux-based operating system based on a build system called Yocto. The Linux kernel used in that build is version 3.10.17 which is patched with a gigantic 150000+ lines patch to add drivers necessary for the Edison. Unfortunately, by now, the 3.10.17 kernel is rather old and lacking features that Ionic/OpenWrt rely upon.
+
+The first step in porting Ionic/OpenWrt to the Intel® Edison is therefor getting a newer kernel running on the Edison. Searching Google, I came across this site:
+
+http://habrahabr.ru/post/254247/
+
+Unfortunately it is all in Russian — of which I understand very little — but with a little help from Google Translate it looked promising.
+
+The author, Andy Shevchenko have managed to boot the Edison using the latest vanilla Linux kernel without using any of the patches.
+
+I decided to try to replicate Andy's effort in order to gain more knowledge of the inner workings of the Edison and to have a platform/framework to port remaining drivers.
+
+
+Kernel
+
+First I cloned the same kernel (this also works using the latest release kernel Linux 4.1-rc7) that Andy was using in his effort:
+
+ git clone git://git.kernel.org/pub/scm/linux/kernel/git/next/linux-next.git
+
+After a considerable time (my Internet sucks big time), I created a copy of the original i386_defconfig:
+
+ cp arch/x86/configs/{i386,edison}_defconfig
+
+Next, edit the arch/x86/configs/edison_defconfig to contain the following:
+
+# CONFIG_DRM_I915 is not set
+CONFIG_BACKLIGHT_LCD_SUPPORT=y
+CONFIG_USB_XHCI_HCD=y
+CONFIG_USB_DWC3=y
+CONFIG_USB_DWC3_GADGET=y
+CONFIG_GPIOLIB=y
+CONFIG_GPIO_INTEL_MID=y
+CONFIG_INTEL_MID_WATCHDOG=y
+CONFIG_X86_EXTENDED_PLATFORM=y
+CONFIG_X86_INTEL_MID=y
+CONFIG_EFI_STUB=y
+CONFIG_EARLY_PRINTK_EFI=y
+CONFIG_HSU_DMA=y
+CONFIG_HSU_DMA_PCI=y
+CONFIG_SERIAL_8250_DMA=y
+CONFIG_SERIAL_8250_MID=y
+CONFIG_SERIAL_8250_PCI=y
+
+Finally, build the kernel using this configuration:
+
+$ make edison_defconfig
+$ make -j4
+$ make bzImage
+
+The -j4 essentially allows four files to be build in parallel. Change the number 4 to the numbers of processors/cores available on the build system.
+64-bit mode
+
+Intel Atom, which is installed on Intel Edison, is known x86_64 CPU. To enable 64-bit build in Linux kernel v4.4 the patch should be applied.
+
+Linux buildroot 4.4.0-next-20160115+ #25 SMP Fri Jan 15 22:03:19 EET 2016 x86_64 GNU/Linux
+
+NOTE: To run it directly from U-Boot one has to update it to at least version 2015.05.
+
+The newest U-Boot sources are available here. I compile them successfully on Debian unstable with whatever default GCC is there.
+
+
+Root Filesystem
+
+In order to build the root filesystem, first clone the buildroot environment:
+
+ git clone git://git.buildroot.net/buildroot
+
+In the buildroot directory, create a configs/edison_defconfig, containing the following:
+
+# Architecture
+BR2_i386=y
+BR2_x86_i586=y
+
+# Misc
+BR2_ROOTFS_DEVICE_CREATION_DYNAMIC_MDEV=y
+BR2_TARGET_GENERIC_GETTY_PORT=«ttyS2»
+
+# Root FS
+# BR2_TARGET_ROOTFS_TAR is not set
+BR2_TARGET_ROOTFS_CPIO=y
+BR2_TARGET_ROOTFS_CPIO_BZIP2=y
+
+# Packages
+BR2_PACKAGE_KEXEC=y
+BR2_PACKAGE_KEXEC_ZLIB=y
+BR2_PACKAGE_LRZSZ=y
+BR2_PACKAGE_SCREEN=y
+BR2_PACKAGE_PCIUTILS=y
+BR2_PACKAGE_DMIDECODE=y
+BR2_PACKAGE_BUSYBOX_WATCHDOG=y
+
+
+Finally, build the root filesystem:
+
+$ make edison_defconfig
+$ make
+
+After a while, the resulting image is available as:
+
+ output/images/rootfs.cpio.bz2
+
+which is roughly 1.6 MB of size.
+Copying file to Edison
+
+Before restarting the Edison while still running the original Intel® provided firmware, create a FAT file system on device 0:9. (If you don't, and save files on the originally-available file system, they will not be visible from U-Boot.)
+
+# mkfs.vfat -F32 -I /dev/mmcblk0p9
+
+Reboot the Edison.
+
+Mount the Edison's now-visible drive on the host computer.
+
+Copy the just-built Linux image and root file system to the Edison drive:
+
+$ cp linux-next/arch/x86/boot/bzImage /<path-to-Edison-drive>/vmlinuz.efi
+$ cp buildroot/output/images/rootfs.cpio.bz2 /<path-to-Edison-drive>/initrd
+
+U-Boot
+
+While still running the original Intel® provided firmware, configure a few variables in the U-Boot environment:
+
+setenv boot_edsboot 'zboot 0x100000 0 0x3000000 0x1000000'
+setenv bootargs_edsboot 'console=tty1 console=ttyS2,115200n8 rootfstype=ramfs rw'
+setenv bootcmd_edsboot 'setenv bootargs ${bootargs_edsboot}; run load_edsboot; run boot_edsboot'
+setenv load_edsboot 'load mmc 0:9 0x100000 vmlinuz.efi; load mmc 0:9 0x3000000 initrd'
+
+The Edison device will still boot as normal, but if the normal boot is interrupted by pressing a key during boot (at the right time), it is now possible to boot the new system:
+
+U-Boot 2014.04 (Jun 04 2015 - 12:37:07)
+
+       Watchdog enabled
+DRAM:  980.6 MiB
+MMC:   tangier_sdhci: 0
+In:    serial
+Out:   serial
+Err:   serial
+Hit any key to stop autoboot:  0
+boot > run bootcmd_edsboot
+
+New U-Boot
+
+
+The older U-Boot doesn't support kernels starting from v4.7. Read some details here Intel Edison does not work on Linux 4.7+ kernels.
+
+Newer U-Boot is located in edison branch of my repository on GitHub.
+
+The goal is to get Intel Edison supported by U-Boot out-of-the-box.
+
+See discussion for more details regarding U-Boot upstream approach.
+Result
+Boot Console
+
+
+******************************
+PSH KERNEL VERSION: b0182b2b
+                WR: 20104000
+******************************
+
+SCU IPC: 0x800000d0  0xfffce92c
+
+PSH miaHOB version: TNG.B0.VVBD.0000000c
+
+microkernel built 11:24:08 Feb  5 2015
+
+******* PSH loader *******
+PCM page cache size = 192 KB
+Cache Constraint = 0 Pages
+Arming IPC driver ..
+Adding page store pool ..
+PagestoreAddr(IMR Start Address) = 0x04899000
+
